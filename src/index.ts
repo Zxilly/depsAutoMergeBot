@@ -55,15 +55,8 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
             ref: data.head.ref,
         })
 
-        if (!(check_suite.data.total_count === 1)) {
-            log(`Check suite ${data.number} more than one check suite or no check suite`);
-            continue;
-        }
-
-        const check_suite_data = check_suite.data.check_suites[0];
-
-        if (!(check_suite_data.conclusion === "success")) {
-            log(`Check suite ${data.number} is not successful`);
+        if (!(check_suite.data.check_suites.every((cs) => cs.conclusion === "success"))) {
+            log(`Check suite ${check_suite.data.check_suites[0].id} is not successful`);
             continue;
         }
 
@@ -108,6 +101,8 @@ export = (app: Probot) => {
                 repo.name,
             )
         }
+
+        context.log.info(`Finished merging all pull requests for installation ${context.payload.installation.id}`);
     })
 
     app.on("check_suite.completed", async (context) => {
@@ -165,6 +160,17 @@ export = (app: Probot) => {
                 continue;
             }
 
+            const check_suites = await context.octokit.checks.listSuitesForRef(
+                context.repo({
+                    ref: data.head.ref,
+                })
+            )
+
+            if (!(check_suites.data.check_suites.every((cs) => cs.conclusion === "success"))) {
+                context.log.info(`Check suite ${check_suites.data.check_suites[0].id} is not successful`);
+                continue;
+            }
+
             await context.octokit.pulls.merge(context.repo({
                 pull_number: data.number,
                 merge_method: "rebase",
@@ -172,5 +178,7 @@ export = (app: Probot) => {
 
             context.log.info(`Pull request ${prString} rebased`);
         }
+
+        context.log.info(`Finished merging all pull requests for check suite ${check_suite.id}`);
     });
 };
