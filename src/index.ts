@@ -56,7 +56,11 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
         })
 
         if (!(check_suite.data.check_suites.every((cs) => cs.conclusion === "success"))) {
-            log(`Check suite ${check_suite.data.check_suites[0].id} is not successful`);
+            for (const cs of check_suite.data.check_suites) {
+                if (cs.conclusion !== "success") {
+                    log(`Check suite ${cs.id} is not successful, ${cs.conclusion}`);
+                }
+            }
             continue;
         }
 
@@ -73,6 +77,8 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
 
 export = (app: Probot) => {
     app.on("installation_repositories.added", async (context) => {
+        context.log.info(`Installation ${context.payload.installation.id} added repositories`);
+
         const repos = context.payload.repositories_added;
 
         for (const repo of repos) {
@@ -86,6 +92,8 @@ export = (app: Probot) => {
     })
 
     app.on("installation.created", async (context) => {
+        context.log.info(`Installation ${context.payload.installation.id} created`);
+
         const repos = context.payload.repositories;
 
         if (!repos) {
@@ -106,10 +114,12 @@ export = (app: Probot) => {
     })
 
     app.on("check_suite.completed", async (context) => {
+        context.log.info(`Check suite ${context.payload.check_suite.id} completed`);
+
         const check_suite = context.payload.check_suite;
 
         if (!(check_suite.conclusion === "success")) {
-            context.log.info(`Check suite ${check_suite.id} is not successful`);
+            context.log.info(`Check suite ${check_suite.id} is not successful, ${check_suite.conclusion}`);
             return;
         }
 
