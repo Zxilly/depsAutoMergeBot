@@ -1,16 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "lib/api/github/webhooks/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "lib/**"
-        ]
-      }
-    }
-  ],
   "buildCommand": "pnpm run build",
   "routes": [
     {
