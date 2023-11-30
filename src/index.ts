@@ -59,6 +59,8 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
             for (const cs of check_suite.data.check_suites) {
                 if (cs.conclusion !== "success") {
                     log(`Check suite ${cs.id} is not successful, ${cs.conclusion}`);
+                    log(`Check suite ${cs.id} has status ${cs.status}`);
+                    log(`Check suite ${cs.id} has url ${cs.url}`);
                 }
             }
             continue;
@@ -124,6 +126,8 @@ export = (app: Probot) => {
 
         if (!(check_suite.conclusion === "success")) {
             context.log.info(`Check suite ${check_suite.id} is not successful, ${check_suite.conclusion}`);
+            context.log.info(`Check suite ${check_suite.id} has status ${check_suite.status}`);
+            context.log.info(`Check suite ${check_suite.id} has url ${check_suite.url}`);
             return;
         }
 
@@ -183,7 +187,8 @@ export = (app: Probot) => {
             if (!(check_suites.data.check_suites.every((cs) => cs.conclusion === "success"))) {
                 for (const cs of check_suites.data.check_suites) {
                     if (cs.conclusion !== "success") {
-                        context.log.info(`Check suite ${cs.id} is not successful, ${cs.conclusion}`);
+                        context.log.info(`Check suite ${cs.id} is not successful, ${cs.conclusion}, ${cs.status}`);
+                        context.log.info(`Check suite ${cs.id} has url ${cs.url}`);
                     }
                 }
                 continue;
