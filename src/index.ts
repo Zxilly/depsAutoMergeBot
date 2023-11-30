@@ -177,7 +177,11 @@ export = (app: Probot) => {
             )
 
             if (!(check_suites.data.check_suites.every((cs) => cs.conclusion === "success"))) {
-                context.log.info(`Check suite ${check_suites.data.check_suites[0].id} is not successful`);
+                for (const cs of check_suites.data.check_suites) {
+                    if (cs.conclusion !== "success") {
+                        context.log.info(`Check suite ${cs.id} is not successful, ${cs.conclusion}`);
+                    }
+                }
                 continue;
             }
 
