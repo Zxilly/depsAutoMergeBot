@@ -76,6 +76,10 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
 }
 
 export = (app: Probot) => {
+    app.onAny(async (context) => {
+        console.log(`Event ${context.name} received`);
+    })
+
     app.on("installation_repositories.added", async (context) => {
         context.log.info(`Installation ${context.payload.installation.id} added repositories`);
 
