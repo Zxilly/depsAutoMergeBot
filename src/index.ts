@@ -1,7 +1,77 @@
 import {Probot} from "probot";
 import type {ProbotOctokit} from "probot/lib/octokit/probot-octokit";
 
-const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: string) => void, owner: string, repo: string) => {
+const mergePR = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: string) => void, owner: string, repo: string, pr: number) => {
+    const pull = await octokit.pulls.get({
+        owner,
+        repo,
+        pull_number: pr,
+    })
+
+    const data = pull.data;
+    if (data.state !== "open") {
+        log(`Pull request ${data.number} is not open`);
+        return;
+    }
+
+    if (data.merged) {
+        log(`Pull request ${data.number} is already merged`);
+        return;
+    }
+
+    if (data.draft) {
+        log(`Pull request ${data.number} is a draft`);
+        return;
+    }
+
+    if (!data.rebaseable) {
+        log(`Pull request ${data.number} is not rebaseable`);
+        return;
+    }
+
+    if (!data.user) {
+        log(`Pull request ${data.number} has no user`);
+        return;
+    }
+
+    if (data.user.login !== "dependabot[bot]") {
+        log(`Pull request ${data.number} is not from dependabot`);
+        return;
+    }
+
+    const check_runs = await octokit.checks.listForRef({
+        owner,
+        repo,
+        ref: data.head.ref,
+    })
+
+    if (check_runs.data.total_count === 0) {
+        log(`No check runs found for pull request ${data.number}`);
+        return;
+    }
+
+    if (!check_runs.data.check_runs.every((cr) => cr.conclusion === "success")) {
+        for (const cr of check_runs.data.check_runs) {
+            if (cr.conclusion !== "success") {
+                log(`Check run ${cr.id} is not successful, ${cr.conclusion}`);
+                log(`Check run ${cr.id} has status ${cr.status}`);
+                log(`Check run ${cr.id} has url ${cr.url}`);
+            }
+        }
+        return;
+    }
+
+    await octokit.pulls.merge({
+        owner,
+        repo,
+        pull_number: data.number,
+        merge_method: "rebase",
+    })
+
+    log(`Pull request ${data.number} rebased`);
+}
+
+const mergeAllPRinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: string) => void, owner: string, repo: string) => {
     const prs = await octokit.pulls.list({
         owner,
         repo,
@@ -12,68 +82,7 @@ const mergeAllinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: 
     log(`Found ${prs.data.length} pull requests for ${owner}/${repo}`);
 
     for (const lpr of prs.data) {
-        const pr = await octokit.pulls.get({
-            owner,
-            repo,
-            pull_number: lpr.number,
-        })
-
-        const data = pr.data;
-        if (data.state !== "open") {
-            log(`Pull request ${data.number} is not open`);
-            continue;
-        }
-
-        if (data.merged) {
-            log(`Pull request ${data.number} is already merged`);
-            continue;
-        }
-
-        if (data.draft) {
-            log(`Pull request ${data.number} is a draft`);
-            continue;
-        }
-
-        if (!data.rebaseable) {
-            log(`Pull request ${data.number} is not rebaseable`);
-            continue;
-        }
-
-        if (!data.user) {
-            log(`Pull request ${data.number} has no user`);
-            continue;
-        }
-
-        if (data.user.login !== "dependabot[bot]") {
-            log(`Pull request ${data.number} is not from dependabot`);
-            continue;
-        }
-
-        const check_suite = await octokit.checks.listSuitesForRef({
-            owner,
-            repo,
-            ref: data.head.ref,
-        })
-
-        if (!(check_suite.data.check_suites.every((cs) => cs.conclusion === "success"))) {
-            for (const cs of check_suite.data.check_suites) {
-                if (cs.conclusion !== "success") {
-                    log(`Check suite ${cs.id} is not successful, ${cs.conclusion}`);
-                    log(`Check suite ${cs.id} has status ${cs.status}`);
-                    log(`Check suite ${cs.id} has url ${cs.url}`);
-                }
-            }
-            continue;
-        }
-
-        await octokit.pulls.merge({
-            owner,
-            repo,
-            pull_number: data.number,
-            merge_method: "rebase",
-        })
-
-        log(`Pull request ${data.number} rebased`);
+        await mergePR(octokit, log, owner, repo, lpr.number);
     }
 }
 
@@ -88,7 +97,7 @@ export = (app: Probot) => {
         const repos = context.payload.repositories_added;
 
         for (const repo of repos) {
-            await mergeAllinRepo(
+            await mergeAllPRinRepo(
                 context.octokit,
                 context.log.info,
                 context.payload.installation.account.login,
@@ -108,7 +117,7 @@ export = (app: Probot) => {
         }
 
         for (const repo of repos) {
-            await mergeAllinRepo(
+            await mergeAllPRinRepo(
                 context.octokit,
                 context.log.info,
                 context.payload.installation.account.login,
@@ -119,89 +128,30 @@ export = (app: Probot) => {
         context.log.info(`Finished merging all pull requests for installation ${context.payload.installation.id}`);
     })
 
-    app.on("check_suite.completed", async (context) => {
-        context.log.info(`Check suite ${context.payload.check_suite.id} completed`);
+    app.on("check_run.completed", async (context) => {
+        context.log.info(`Check run ${context.payload.check_run.id} completed`);
 
-        const check_suite = context.payload.check_suite;
+        const check_run = context.payload.check_run;
+        const cprs = check_run.pull_requests;
 
-        if (!(check_suite.conclusion === "success")) {
-            context.log.info(`Check suite ${check_suite.id} is not successful, ${check_suite.conclusion}`);
-            context.log.info(`Check suite ${check_suite.id} has status ${check_suite.status}`);
-            context.log.info(`Check suite ${check_suite.id} has url ${check_suite.url}`);
+        if (cprs.length === 0) {
+            context.log.info(`No pull requests found for check run ${context.payload.check_run.id}`);
             return;
         }
 
-        const pullRequests = check_suite.pull_requests;
-
-        if (pullRequests.length === 0) {
-            context.log.info(`No pull requests found for check suite ${check_suite.id}`);
+        if (check_run.conclusion !== "success") {
+            context.log.info(`Check run ${context.payload.check_run.id} is not successful, ${check_run.conclusion}`);
             return;
         }
 
-        for (const cpr of pullRequests) {
-            const pr = await context.octokit.pulls.get(
-                context.repo({
-                    pull_number: cpr.number,
-                })
+        for (const cpr of cprs) {
+            await mergePR(
+                context.octokit,
+                context.log.info,
+                context.payload.repository.owner.login,
+                context.payload.repository.name,
+                cpr.number,
             )
-            const data = pr.data;
-
-            const prString = `${context.repo().owner}/${context.repo().repo}/${data.number}`;
-
-            if (data.state !== "open") {
-                context.log.info(`Pull request ${prString} is not open`);
-                continue;
-            }
-
-            if (data.merged) {
-                context.log.info(`Pull request ${prString} is already merged`);
-                continue;
-            }
-
-            if (data.draft) {
-                context.log.info(`Pull request ${prString} is a draft`);
-                continue;
-            }
-
-            if (!data.rebaseable) {
-                context.log.info(`Pull request ${prString} is not rebaseable`);
-                continue;
-            }
-
-            if (!data.user) {
-                context.log.info(`Pull request ${prString} has no user`);
-                continue;
-            }
-
-            if (data.user.login !== "dependabot[bot]") {
-                context.log.info(`Pull request ${prString} is not from dependabot`);
-                continue;
-            }
-
-            const check_suites = await context.octokit.checks.listSuitesForRef(
-                context.repo({
-                    ref: data.head.ref,
-                })
-            )
-
-            if (!(check_suites.data.check_suites.every((cs) => cs.conclusion === "success"))) {
-                for (const cs of check_suites.data.check_suites) {
-                    if (cs.conclusion !== "success") {
-                        context.log.info(`Check suite ${cs.id} is not successful, ${cs.conclusion}, ${cs.status}`);
-                        context.log.info(`Check suite ${cs.id} has url ${cs.url}`);
-                    }
-                }
-                continue;
-            }
-
-            await context.octokit.pulls.merge(context.repo({
-                pull_number: data.number,
-                merge_method: "rebase",
-            }))
-
-            context.log.info(`Pull request ${prString} rebased`);
         }
-
-        context.log.info(`Finished merging all pull requests for check suite ${check_suite.id}`);
-    });
+    })
 };
