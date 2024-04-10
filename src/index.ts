@@ -1,11 +1,11 @@
 import {Probot} from "probot";
-import type {ProbotOctokit} from "probot/lib/octokit/probot-octokit";
+import type {ProbotOctokit} from "probot";
 
-const acceptableConclusions = function (cr: { conclusion: string | null; }) {
-    return cr.conclusion === "success" || cr.conclusion === "skipped";
+const acceptableConclusions = function (conclusion: string | null) {
+    return conclusion === "success" || conclusion === "skipped";
 }
 
-const mergePR = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: string) => void, owner: string, repo: string, pr: number) => {
+const mergePR = async (octokit: ProbotOctokit, log: (msg: string) => void, owner: string, repo: string, pr: number) => {
     const pull = await octokit.pulls.get({
         owner,
         repo,
@@ -54,9 +54,9 @@ const mergePR = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: s
         return;
     }
 
-    if (!check_runs.data.check_runs.every((cr) => acceptableConclusions(cr))) {
+    if (!check_runs.data.check_runs.every((cr) => acceptableConclusions(cr.conclusion))) {
         for (const cr of check_runs.data.check_runs) {
-            if (!acceptableConclusions(cr)) {
+            if (!acceptableConclusions(cr.conclusion)) {
                 log(`Check run ${cr.id} is not successful, ${cr.conclusion}`);
                 log(`Check run ${cr.id} has status ${cr.status}`);
                 log(`Check run ${cr.id} has url ${cr.url}`);
@@ -143,7 +143,7 @@ export = (app: Probot) => {
             return;
         }
 
-        if (!acceptableConclusions(check_run)) {
+        if (!acceptableConclusions(check_run.conclusion)) {
             context.log.info(`Check run ${context.payload.check_run.id} is not successful, ${check_run.conclusion}`);
             return;
         }
