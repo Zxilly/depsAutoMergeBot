@@ -158,4 +158,31 @@ export = (app: Probot) => {
             )
         }
     })
+
+    app.on("check_suite.completed", async (context) => {
+        context.log.info(`Check suite ${context.payload.check_suite.id} completed`);
+
+        const check_suite = context.payload.check_suite;
+        const cprs = check_suite.pull_requests;
+
+        if (cprs.length === 0) {
+            context.log.info(`No pull requests found for check suite ${context.payload.check_suite.id}`);
+            return;
+        }
+
+        if (!acceptableConclusions(check_suite.conclusion)) {
+            context.log.info(`Check suite ${context.payload.check_suite.id} is not successful, ${check_suite.conclusion}`);
+            return;
+        }
+
+        for (const cpr of cprs) {
+            await mergePR(
+                context.octokit,
+                context.log.info,
+                context.payload.repository.owner.login,
+                context.payload.repository.name,
+                cpr.number,
+            )
+        }
+    })
 };
