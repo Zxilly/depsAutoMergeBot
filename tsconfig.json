@@ -6,7 +6,7 @@
       "es2015",
       "es2017"
     ],
-    "declaration": true,
+    "declaration": false,
     "sourceMap": true,
     "outDir": "./lib",
     "strict": true,
