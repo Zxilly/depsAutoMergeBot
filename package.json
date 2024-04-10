@@ -13,8 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "probot run ./lib/index.js",
-    "dev": "vercel dev --listen 3000"
+    "start": "tsc && probot run ./lib/src/index.js"
   },
   "dependencies": {
     "probot": "^13.2.0"

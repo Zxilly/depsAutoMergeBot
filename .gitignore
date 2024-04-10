@@ -7,3 +7,6 @@ coverage
 lib/
 .idea/
 .vercel
+
+.vercel
+.env
