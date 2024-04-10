@@ -17,12 +17,12 @@
     "dev": "vercel dev --listen 3000"
   },
   "dependencies": {
-    "probot": "^12.3.3"
+    "probot": "^13.2.0"
   },
   "devDependencies": {
-    "@types/node": "^20.9.5",
-    "smee-client": "^2.0.0",
-    "typescript": "^5.3.2"
+    "@types/node": "^20.12.7",
+    "smee-client": "^2.0.1",
+    "typescript": "^5.4.4"
   },
   "engines": {
     "node": ">= 10.13.0"
