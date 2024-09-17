@@ -65,14 +65,18 @@ const mergePR = async (octokit: ProbotOctokit, log: (msg: string) => void, owner
         return;
     }
 
-    await octokit.pulls.merge({
+    const {data: {merged, message}} = await octokit.pulls.merge({
         owner,
         repo,
         pull_number: data.number,
         merge_method: "rebase",
     })
 
-    log(`Pull request ${data.number} rebased`);
+    if (merged) {
+        log(`Pull request ${data.number} merged successfully`);
+    } else {
+        log(`Pull request ${data.number} failed to merge: ${message}`);
+    }
 }
 
 const mergeAllPRinRepo = async (octokit: InstanceType<typeof ProbotOctokit>, log: (msg: string) => void, owner: string, repo: string) => {
